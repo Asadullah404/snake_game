@@ -1,4 +1,4 @@
-  body {
+    body {
         margin: 0;
         padding: 0;
         display: flex;
@@ -48,4 +48,26 @@
     .button:focus {
         outline: none;
         box-shadow: 0 0 5px rgba(33, 161, 241, 0.5);
+    }
+    @media (max-width: 600px) {
+        #gameCanvas {
+            width: 90vw;
+            height: 90vw;
+        }
+        #score {
+            font-size: 20px;
+        }
+        #gameOver {
+            font-size: 28px;
+        }
+        .button {
+            font-size: 16px;
+            padding: 8px 16px;
+        }
+    }
+    @media (min-width: 601px) {
+        #gameCanvas {
+            width: 400px;
+            height: 400px;
+        }
     }

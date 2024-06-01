@@ -1,8 +1,18 @@
-  const canvas = document.getElementById('gameCanvas');
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    
+
     const gridSize = 20;
-    const tileCount = canvas.width / gridSize;
+    let tileCount;
+
+    function resizeCanvas() {
+        const size = window.innerWidth < 600 ? canvas.width : 400;
+        canvas.width = size;
+        canvas.height = size;
+        tileCount = canvas.width / gridSize;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     let snake = [{x: 10, y: 10}];
     let food = {x: 15, y: 15};
