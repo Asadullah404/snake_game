@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Snake Game</title>
+<title>Snake Game with Authentication and Leaderboard</title>
 <style>
+    /* Add your styles here */
     body {
         margin: 0;
         padding: 0;
@@ -55,6 +56,9 @@
     .button:focus {
         outline: none;
         box-shadow: 0 0 5px rgba(33, 161, 241, 0.5);
+    }
+    #loginForm, #leaderboard {
+        display: none;
     }
     @media (max-width: 600px) {
         #gameCanvas {
@@ -109,11 +113,23 @@
 </style>
 </head>
 <body>
+<div id="loginForm">
+    <h2>Login</h2>
+    <input type="email" id="email" placeholder="Email" required><br>
+    <input type="password" id="password" placeholder="Password" required><br>
+    <button id="loginButton" class="button">Login</button>
+    <button id="signUpButton" class="button">Sign Up</button>
+</div>
 <canvas id="gameCanvas"></canvas>
 <div id="score">Score: 0</div>
 <div id="gameOver">Game Over</div>
 <button id="resetButton" class="button">Reset</button>
 <button class="button" onclick="toggleFullScreen()">Toggle Fullscreen</button>
+<button id="leaderboardButton" class="button">Leaderboard</button>
+<div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <ul id="leaderboardList"></ul>
+</div>
 <div id="joystick">
     <div class="joystick-row">
         <button class="joystick-button" id="up">↑</button>
@@ -126,18 +142,77 @@
         <button class="joystick-button" id="down">↓</button>
     </div>
 </div>
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+<script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-app.js";
+    import { getDatabase, ref, set, get, update, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-database.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-auth.js";
+
+    // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyBMW7DgDnQzxOGRB6jkWPBYrp4xT-L_beY",
+    authDomain: "snake-7a9a9.firebaseapp.com",
+    projectId: "snake-7a9a9",
+    storageBucket: "snake-7a9a9.appspot.com",
+    messagingSenderId: "473671669706",
+    appId: "1:473671669706:web:3a0386d468d9715f9aa133"
+  };
+
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    // User login and sign-up functionality
+    const loginForm = document.getElementById('loginForm');
+    const gameCanvas = document.getElementById('gameCanvas');
+    const resetButton = document.getElementById('resetButton');
+    const leaderboardButton = document.getElementById('leaderboardButton');
+    const leaderboard = document.getElementById('leaderboard');
+    const leaderboardList = document.getElementById('leaderboardList');
+
+    // Show login form if no user is logged in
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            loginForm.style.display = 'none';
+            gameCanvas.style.display = 'block';
+            resetButton.style.display = 'block';
+            leaderboardButton.style.display = 'block';
+        } else {
+            loginForm.style.display = 'block';
+            gameCanvas.style.display = 'none';
+            resetButton.style.display = 'none';
+            leaderboardButton.style.display = 'none';
+            leaderboard.style.display = 'none';
+        }
+    });
+
+    document.getElementById('loginButton').addEventListener('click', () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        signInWithEmailAndPassword(auth, email, password)
+            .catch(error => alert(error.message));
+    });
+
+    document.getElementById('signUpButton').addEventListener('click', () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        createUserWithEmailAndPassword(auth, email, password)
+            .catch(error => alert(error.message));
+    });
+
+    // Snake game functionality
+    const ctx = gameCanvas.getContext('2d');
 
     const gridSize = 20;
     let tileCount;
 
     function resizeCanvas() {
-        const size = window.innerWidth < 600 ? canvas.width : 400;
-        canvas.width = size;
-        canvas.height = size;
-        tileCount = canvas.width / gridSize;
+        const size = window.innerWidth < 600 ? gameCanvas.width : 400;
+        gameCanvas.width = size;
+        gameCanvas.height = size;
+        tileCount = gameCanvas.width / gridSize;
     }
 
     window.addEventListener('resize', resizeCanvas);
@@ -154,112 +229,108 @@
 
     function drawSnake() {
         snake.forEach(segment => {
-            ctx.fillStyle = 'green'; // Change snake color to green
+            ctx.fillStyle = 'green';
             ctx.beginPath();
-            ctx.arc((segment.x * gridSize) + gridSize / 2, (segment.y * gridSize) + gridSize / 2, gridSize / 2, 0, Math.PI * 2);
+            ctx.arc(segment.x * gridSize + gridSize / 2, segment.y * gridSize + gridSize / 2, gridSize / 2, 0, Math.PI * 2);
             ctx.fill();
         });
     }
 
     function drawFood() {
         ctx.fillStyle = 'red';
-        ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+        ctx.beginPath();
+        ctx.arc(food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2, gridSize / 2, 0, Math.PI * 2);
+        ctx.fill();
     }
 
     function moveSnake() {
         const head = {x: snake[0].x + dx, y: snake[0].y + dy};
         snake.unshift(head);
+
         if (head.x === food.x && head.y === food.y) {
-            generateFood();
             score++;
-            document.getElementById('score').textContent = 'Score: ' + score;
-            increaseSpeed();
+            interval = Math.max(50, interval - 5);
+            clearInterval(intervalId);
+            intervalId = setInterval(gameLoop, interval);
+            placeFood();
         } else {
             snake.pop();
-        }
-        if (checkCollision()) {
-            endGame();
-        }
-    }
-
-    function generateFood() {
-        food.x = Math.floor(Math.random() * tileCount);
-        food.y = Math.floor(Math.random() * tileCount);
-    }
-
-    function clearCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    function main() {
-        if (!gameOver) {
-            clearCanvas();
-            moveSnake();
-            drawFood();
-            drawSnake();
         }
     }
 
     function checkCollision() {
         const head = snake[0];
-        return (
-            head.x < 0 ||
-            head.x >= tileCount ||
-            head.y < 0 ||
-            head.y >= tileCount ||
-            snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y)
-        );
+        if (head.x < 0 || head.y < 0 || head.x >= tileCount || head.y >= tileCount) {
+            return true;
+        }
+        for (let i = 1; i < snake.length; i++) {
+            if (head.x === snake[i].x && head.y === snake[i].y) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    function endGame() {
-        gameOver = true;
-        clearInterval(intervalId);
-        document.getElementById('gameOver').style.display = 'block';
+    function placeFood() {
+        food = {
+            x: Math.floor(Math.random() * tileCount),
+            y: Math.floor(Math.random() * tileCount)
+        };
+        if (snake.some(segment => segment.x === food.x && segment.y === food.y)) {
+            placeFood();
+        }
     }
 
-    function resetGame() {
-        snake = [{x: 10, y: 10}];
-        food = {x: 15, y: 15};
-        dx = 0;
-        dy = 0;
-        score = 0;
-        gameOver = false;
-        interval = 100;
-        clearInterval(intervalId);
-        intervalId = setInterval(main, interval);
-        document.getElementById('score').textContent = 'Score: ' + score;
-        document.getElementById('gameOver').style.display = 'none';
+    function gameLoop() {
+        if (gameOver) return;
+
+        ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+        moveSnake();
+        if (checkCollision()) {
+            gameOver = true;
+            document.getElementById('gameOver').style.display = 'block';
+            saveScore();
+        }
+        drawSnake();
+        drawFood();
+        document.getElementById('score').innerText = `Score: ${score}`;
     }
 
-    function increaseSpeed() {
-        clearInterval(intervalId);
-        interval -= 5;
-        intervalId = setInterval(main, interval);
+    function saveScore() {
+        const user = auth.currentUser;
+        if (user) {
+            const userId = user.uid;
+            const userRef = ref(db, `users/${userId}`);
+            get(userRef).then(snapshot => {
+                const userData = snapshot.val() || {};
+                const highscore = Math.max(userData.highscore || 0, score);
+                update(userRef, { email: user.email, highscore });
+            });
+        }
     }
 
-    document.addEventListener('keydown', function(event) {
-        const key = event.key;
-        switch (key) {
+    document.addEventListener('keydown', (e) => {
+        switch (e.key) {
             case 'ArrowUp':
-                if (dy !== 1) {
+                if (dy === 0) {
                     dx = 0;
                     dy = -1;
                 }
                 break;
             case 'ArrowDown':
-                if (dy !== -1) {
+                if (dy === 0) {
                     dx = 0;
                     dy = 1;
                 }
                 break;
             case 'ArrowLeft':
-                if (dx !== 1) {
+                if (dx === 0) {
                     dx = -1;
                     dy = 0;
                 }
                 break;
             case 'ArrowRight':
-                if (dx !== -1) {
+                if (dx === 0) {
                     dx = 1;
                     dy = 0;
                 }
@@ -267,37 +338,57 @@
         }
     });
 
-    document.getElementById('resetButton').addEventListener('click', resetGame);
-
-    document.getElementById('up').addEventListener('click', function() {
-        if (dy !== 1) {
+    // Mobile joystick controls
+    document.getElementById('up').addEventListener('click', () => {
+        if (dy === 0) {
             dx = 0;
             dy = -1;
         }
     });
-
-    document.getElementById('down').addEventListener('click', function() {
-        if (dy !== -1) {
+    document.getElementById('down').addEventListener('click', () => {
+        if (dy === 0) {
             dx = 0;
             dy = 1;
         }
     });
-
-    document.getElementById('left').addEventListener('click', function() {
-        if (dx !== 1) {
+    document.getElementById('left').addEventListener('click', () => {
+        if (dx === 0) {
             dx = -1;
             dy = 0;
         }
     });
-
-    document.getElementById('right').addEventListener('click', function() {
-        if (dx !== -1) {
+    document.getElementById('right').addEventListener('click', () => {
+        if (dx === 0) {
             dx = 1;
             dy = 0;
         }
     });
 
-    intervalId = setInterval(main, interval);
+    resetButton.addEventListener('click', () => {
+        snake = [{x: 10, y: 10}];
+        dx = 0;
+        dy = 0;
+        score = 0;
+        gameOver = false;
+        interval = 100;
+        document.getElementById('gameOver').style.display = 'none';
+        clearInterval(intervalId);
+        intervalId = setInterval(gameLoop, interval);
+        gameLoop();
+    });
+
+    leaderboardButton.addEventListener('click', () => {
+        leaderboard.style.display = 'block';
+        const topScoresQuery = query(ref(db, 'users'), orderByChild('highscore'), limitToLast(10));
+        onValue(topScoresQuery, (snapshot) => {
+            const leaderboardData = [];
+            snapshot.forEach(childSnapshot => {
+                const user = childSnapshot.val();
+                leaderboardData.push({ email: user.email, highscore: user.highscore });
+            });
+            leaderboardList.innerHTML = leaderboardData.reverse().map(user => `<li>${user.email}: ${user.highscore}</li>`).join('');
+        });
+    });
 
     function toggleFullScreen() {
         if (!document.fullscreenElement) {
@@ -308,6 +399,8 @@
             }
         }
     }
+
+    intervalId = setInterval(gameLoop, interval);
 </script>
 </body>
 </html>
